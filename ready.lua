@@ -39,6 +39,13 @@ local AIM_SETTINGS = {
     FOVColor = Color3.fromRGB(0, 255, 0)
 }
 
+local HVH_SETTINGS = {
+    OrbitEnabled = false,
+    OrbitTarget = nil,
+    OrbitSpeed = 10,
+    OrbitDistance = 5
+}
+
 local bones = {
     {"Head","UpperTorso"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},
     {"UpperTorso","LeftUpperArm"}, {"LeftUpperArm","LeftLowerArm"}, {"LeftLowerArm","LeftHand"},
@@ -47,7 +54,7 @@ local bones = {
 }
 
 -- ══════════════════════════════════════════
---  ESP CORE LOGIC (FROM YOUR REFERENCE)
+--  ESP CORE LOGIC
 -- ══════════════════════════════════════════
 local cache = {}
 local function newDrawing(class, props)
@@ -64,7 +71,8 @@ end
 local function behindWall(plr)
     local char = plr.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
-    local ray = Ray.new(camera.CFrame.Position, (char.HumanoidRootPart.Position - camera.CFrame.Position).Unit * (char.HumanoidRootPart.Position - camera.CFrame.Position).Magnitude)
+    local hrp = char.HumanoidRootPart
+    local ray = Ray.new(camera.CFrame.Position, (hrp.Position - camera.CFrame.Position).Unit * (hrp.Position - camera.CFrame.Position).Magnitude)
     return workspace:FindPartOnRayWithIgnoreList(ray, {player.Character, char}) ~= nil
 end
 
@@ -100,21 +108,27 @@ Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 0)
 local sidebar = Instance.new("Frame", mainFrame); sidebar.Size = UDim2.new(0, 120, 1, 0); sidebar.BackgroundColor3 = Color3.fromRGB(8, 8, 8); sidebar.BorderSizePixel = 0
 local container = Instance.new("Frame", mainFrame); container.Size = UDim2.new(1, -140, 1, -20); container.Position = UDim2.new(0, 130, 0, 10); container.BackgroundTransparency = 1
 
-local vFrame = Instance.new("ScrollingFrame", container); vFrame.Size = UDim2.new(1,0,1,0); vFrame.BackgroundTransparency = 1; vFrame.ScrollBarThickness = 0
+local vFrame = Instance.new("ScrollingFrame", container); vFrame.Size = UDim2.new(1,0,1,0); vFrame.BackgroundTransparency = 1; vFrame.Visible = true; vFrame.ScrollBarThickness = 0
 local aFrame = Instance.new("ScrollingFrame", container); aFrame.Size = UDim2.new(1,0,1,0); aFrame.BackgroundTransparency = 1; aFrame.Visible = false; aFrame.ScrollBarThickness = 0
+local hFrame = Instance.new("ScrollingFrame", container); hFrame.Size = UDim2.new(1,0,1,0); hFrame.BackgroundTransparency = 1; hFrame.Visible = false; hFrame.ScrollBarThickness = 0
+
 Instance.new("UIListLayout", vFrame).Padding = UDim.new(0, 8)
 Instance.new("UIListLayout", aFrame).Padding = UDim.new(0, 8)
+Instance.new("UIListLayout", hFrame).Padding = UDim.new(0, 8)
 
 local function makeTab(txt, y, target)
     local b = Instance.new("TextButton", sidebar); b.Size = UDim2.new(1, 0, 0, 40); b.Position = UDim2.new(0, 0, 0, y)
     b.BackgroundColor3 = Color3.fromRGB(8, 8, 8); b.Text = txt; b.TextColor3 = Color3.fromRGB(150, 150, 150); b.Font = Enum.Font.Code; b.BorderSizePixel = 0; b.TextSize = 15
     b.MouseButton1Click:Connect(function() 
-        vFrame.Visible = false; aFrame.Visible = false; target.Visible = true 
+        vFrame.Visible = false; aFrame.Visible = false; hFrame.Visible = false
+        target.Visible = true 
         for _,v in pairs(sidebar:GetChildren()) do if v:IsA("TextButton") then v.TextColor3 = Color3.fromRGB(150, 150, 150) end end
         b.TextColor3 = Color3.fromRGB(0, 255, 0)
     end)
 end
-makeTab("Visuals", 10, vFrame); makeTab("Aimbot", 55, aFrame)
+makeTab("Visuals", 10, vFrame)
+makeTab("Aimbot", 55, aFrame)
+makeTab("HvH", 100, hFrame)
 
 -- GUI COMPONENTS
 local function createToggle(txt, parent, cb)
@@ -141,7 +155,41 @@ local function createSlider(txt, min, max, start, parent, cb)
     RunService.RenderStepped:Connect(function() if dragging then update() end end)
 end
 
--- TAB CONTENT (LINKED TO ESP_SETTINGS)
+local function createDropdown(parent, text, callback)
+    local frame = Instance.new("Frame", parent); frame.Size = UDim2.new(1, 0, 0, 30); frame.BackgroundTransparency = 1
+    local btn = Instance.new("TextButton", frame); btn.Size = UDim2.new(0.95, 0, 1, 0); btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20); btn.Text = text .. ": None"; btn.TextColor3 = Color3.new(1,1,1); btn.Font = Enum.Font.Code; btn.BorderSizePixel = 0; btn.ZIndex = 2
+    
+    local list = Instance.new("ScrollingFrame", parent); list.Size = UDim2.new(0.95, 0, 0, 100); list.BackgroundColor3 = Color3.fromRGB(15, 15, 15); list.Visible = false; list.ScrollBarThickness = 2; list.BorderSizePixel = 0; list.ZIndex = 3
+    local layout = Instance.new("UIListLayout", list); layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    btn.MouseButton1Click:Connect(function()
+        list.Visible = not list.Visible
+        if list.Visible then
+            for _, v in pairs(list:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= player then
+                    local pBtn = Instance.new("TextButton", list)
+                    pBtn.Size = UDim2.new(1, 0, 0, 25)
+                    pBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+                    pBtn.Text = p.Name
+                    pBtn.TextColor3 = Color3.new(1,1,1)
+                    pBtn.Font = Enum.Font.Code
+                    pBtn.TextSize = 14
+                    pBtn.BorderSizePixel = 0
+                    pBtn.ZIndex = 4
+                    pBtn.MouseButton1Click:Connect(function() 
+                        btn.Text = text .. ": " .. p.Name
+                        list.Visible = false
+                        callback(p) 
+                    end)
+                end
+            end
+            list.CanvasSize = UDim2.new(0, 0, 0, #list:GetChildren() * 25)
+        end
+    end)
+end
+
+-- TAB CONTENT
 createToggle("Box ESP", vFrame, function(v) ESP_SETTINGS.ShowBox = v end)
 createToggle("Name ESP", vFrame, function(v) ESP_SETTINGS.ShowName = v end)
 createToggle("Health ESP", vFrame, function(v) ESP_SETTINGS.ShowHealth = v end)
@@ -153,8 +201,13 @@ createToggle("Wall Check", aFrame, function(v) AIM_SETTINGS.WallCheck = v end)
 createSlider("Smoothness", 1, 100, 15, aFrame, function(v) AIM_SETTINGS.Smoothness = v end)
 createSlider("FOV Radius", 10, 500, 110, aFrame, function(v) AIM_SETTINGS.FOV = v end)
 
+createToggle("Orbit Enabled", hFrame, function(v) HVH_SETTINGS.OrbitEnabled = v end)
+createDropdown(hFrame, "Select Player", function(p) HVH_SETTINGS.OrbitTarget = p end)
+createSlider("Orbit Speed", 1, 100, 10, hFrame, function(v) HVH_SETTINGS.OrbitSpeed = v end)
+createSlider("Orbit Distance", 2, 50, 5, hFrame, function(v) HVH_SETTINGS.OrbitDistance = v end)
+
 -- ══════════════════════════════════════════
---  ENGINE (COMBINED)
+--  ENGINE
 -- ══════════════════════════════════════════
 local fovCircle = Drawing.new("Circle"); fovCircle.Thickness = 1; fovCircle.Visible = true
 
@@ -178,21 +231,16 @@ RunService.RenderStepped:Connect(function()
                     local sizeX = sizeY * 0.6
                     local boxPos = Vector2.new(rootPos.X - sizeX/2, rootPos.Y - sizeY/2)
 
-                    -- Box
                     e.box.Visible = ESP_SETTINGS.ShowBox; e.box.Size = Vector2.new(sizeX, sizeY); e.box.Position = boxPos; e.box.Color = color
                     e.boxOutline.Visible = ESP_SETTINGS.ShowBox; e.boxOutline.Size = e.box.Size; e.boxOutline.Position = boxPos; e.boxOutline.Color = Color3.new(0,0,0)
-                    
-                    -- Name
                     e.name.Visible = ESP_SETTINGS.ShowName; e.name.Text = plr.Name; e.name.Position = Vector2.new(rootPos.X, boxPos.Y - 16); e.name.Color = color
                     
-                    -- Health
                     if ESP_SETTINGS.ShowHealth then
                         local hp = hum.Health / hum.MaxHealth
                         e.healthBg.Visible = true; e.healthBg.Size = Vector2.new(4, sizeY); e.healthBg.Position = Vector2.new(boxPos.X - 6, boxPos.Y)
                         e.healthFill.Visible = true; e.healthFill.Size = Vector2.new(2, sizeY * hp); e.healthFill.Position = Vector2.new(boxPos.X - 5, boxPos.Y + (sizeY * (1-hp))); e.healthFill.Color = Color3.fromRGB(255*(1-hp), 255*hp, 0)
                     else e.healthBg.Visible = false; e.healthFill.Visible = false end
 
-                    -- Skeleton
                     if ESP_SETTINGS.ShowSkeletons then
                         if #e.skeleton == 0 then for _,bp in pairs(bones) do table.insert(e.skeleton, {newDrawing("Line",{Thickness=1}), bp[1], bp[2]}) end end
                         for _,ld in pairs(e.skeleton) do
@@ -223,6 +271,18 @@ RunService.RenderStepped:Connect(function()
         if target then
             local tPos = camera:WorldToViewportPoint(target.Position); local mPos = UserInputService:GetMouseLocation()
             mousemoverel((tPos.X - mPos.X)/(AIM_SETTINGS.Smoothness/5), (tPos.Y - mPos.Y)/(AIM_SETTINGS.Smoothness/5))
+        end
+    end
+
+    -- ORBIT UPDATE
+    if HVH_SETTINGS.OrbitEnabled and HVH_SETTINGS.OrbitTarget and HVH_SETTINGS.OrbitTarget.Character then
+        local tRoot = HVH_SETTINGS.OrbitTarget.Character:FindFirstChild("HumanoidRootPart")
+        local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if tRoot and myRoot then
+            local angle = tick() * HVH_SETTINGS.OrbitSpeed
+            local offset = Vector3.new(math.sin(angle) * HVH_SETTINGS.OrbitDistance, 2, math.cos(angle) * HVH_SETTINGS.OrbitDistance)
+            myRoot.CFrame = CFrame.new(tRoot.Position + offset, tRoot.Position)
+            myRoot.Velocity = Vector3.new(0,0,0)
         end
     end
 end)
