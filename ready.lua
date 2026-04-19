@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService") -- Für CFGs hinzugefügt
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -103,7 +104,8 @@ if CoreGui:FindFirstChild("KikiaHookV2") then CoreGui.KikiaHookV2:Destroy() end
 local screenGui = Instance.new("ScreenGui", CoreGui); screenGui.Name = "KikiaHookV2"
 local mainFrame = Instance.new("Frame", screenGui)
 mainFrame.Size = UDim2.new(0, 520, 0, 420); mainFrame.Position = UDim2.new(0.5, -260, 0.5, -210); mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12); mainFrame.BorderSizePixel = 0
-Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 255, 0)
+local uiStroke = Instance.new("UIStroke", mainFrame)
+uiStroke.Color = Color3.fromRGB(0, 255, 0)
 
 local sidebar = Instance.new("Frame", mainFrame); sidebar.Size = UDim2.new(0, 120, 1, 0); sidebar.BackgroundColor3 = Color3.fromRGB(8, 8, 8); sidebar.BorderSizePixel = 0
 local container = Instance.new("Frame", mainFrame); container.Size = UDim2.new(1, -140, 1, -20); container.Position = UDim2.new(0, 130, 0, 10); container.BackgroundTransparency = 1
@@ -111,24 +113,29 @@ local container = Instance.new("Frame", mainFrame); container.Size = UDim2.new(1
 local vFrame = Instance.new("ScrollingFrame", container); vFrame.Size = UDim2.new(1,0,1,0); vFrame.BackgroundTransparency = 1; vFrame.Visible = true; vFrame.ScrollBarThickness = 0
 local aFrame = Instance.new("ScrollingFrame", container); aFrame.Size = UDim2.new(1,0,1,0); aFrame.BackgroundTransparency = 1; aFrame.Visible = false; aFrame.ScrollBarThickness = 0
 local hFrame = Instance.new("ScrollingFrame", container); hFrame.Size = UDim2.new(1,0,1,0); hFrame.BackgroundTransparency = 1; hFrame.Visible = false; hFrame.ScrollBarThickness = 0
+local sFrame = Instance.new("Frame", container); sFrame.Size = UDim2.new(1,0,1,0); sFrame.BackgroundTransparency = 1; sFrame.Visible = false
 
 Instance.new("UIListLayout", vFrame).Padding = UDim.new(0, 8)
 Instance.new("UIListLayout", aFrame).Padding = UDim.new(0, 8)
 Instance.new("UIListLayout", hFrame).Padding = UDim.new(0, 8)
 
-local function makeTab(txt, y, target)
-    local b = Instance.new("TextButton", sidebar); b.Size = UDim2.new(1, 0, 0, 40); b.Position = UDim2.new(0, 0, 0, y)
+local allTabButtons = {}
+local function makeTab(txt, y, target, isBottom)
+    local b = Instance.new("TextButton", sidebar); b.Size = UDim2.new(1, 0, 0, 40)
+    if isBottom then b.Position = UDim2.new(0, 0, 1, -40) else b.Position = UDim2.new(0, 0, 0, y) end
     b.BackgroundColor3 = Color3.fromRGB(8, 8, 8); b.Text = txt; b.TextColor3 = Color3.fromRGB(150, 150, 150); b.Font = Enum.Font.Code; b.BorderSizePixel = 0; b.TextSize = 15
+    table.insert(allTabButtons, b)
     b.MouseButton1Click:Connect(function() 
-        vFrame.Visible = false; aFrame.Visible = false; hFrame.Visible = false
+        vFrame.Visible = false; aFrame.Visible = false; hFrame.Visible = false; sFrame.Visible = false
         target.Visible = true 
-        for _,v in pairs(sidebar:GetChildren()) do if v:IsA("TextButton") then v.TextColor3 = Color3.fromRGB(150, 150, 150) end end
+        for _,v in pairs(allTabButtons) do v.TextColor3 = Color3.fromRGB(150, 150, 150) end
         b.TextColor3 = Color3.fromRGB(0, 255, 0)
     end)
 end
 makeTab("Visuals", 10, vFrame)
 makeTab("Aimbot", 55, aFrame)
 makeTab("HvH", 100, hFrame)
+makeTab("Settings", 0, sFrame, true)
 
 -- GUI COMPONENTS
 local function createToggle(txt, parent, cb)
@@ -169,19 +176,8 @@ local function createDropdown(parent, text, callback)
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= player then
                     local pBtn = Instance.new("TextButton", list)
-                    pBtn.Size = UDim2.new(1, 0, 0, 25)
-                    pBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-                    pBtn.Text = p.Name
-                    pBtn.TextColor3 = Color3.new(1,1,1)
-                    pBtn.Font = Enum.Font.Code
-                    pBtn.TextSize = 14
-                    pBtn.BorderSizePixel = 0
-                    pBtn.ZIndex = 4
-                    pBtn.MouseButton1Click:Connect(function() 
-                        btn.Text = text .. ": " .. p.Name
-                        list.Visible = false
-                        callback(p) 
-                    end)
+                    pBtn.Size = UDim2.new(1, 0, 0, 25); pBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); pBtn.Text = p.Name; pBtn.TextColor3 = Color3.new(1,1,1); pBtn.Font = Enum.Font.Code; pBtn.TextSize = 14; pBtn.BorderSizePixel = 0; pBtn.ZIndex = 4
+                    pBtn.MouseButton1Click:Connect(function() btn.Text = text .. ": " .. p.Name; list.Visible = false; callback(p) end)
                 end
             end
             list.CanvasSize = UDim2.new(0, 0, 0, #list:GetChildren() * 25)
@@ -189,7 +185,60 @@ local function createDropdown(parent, text, callback)
     end)
 end
 
--- TAB CONTENT
+-- ══════════════════════════════════════════
+--  SETTINGS TAB DESIGN (LIKE IMAGE)
+-- ══════════════════════════════════════════
+local leftPanel = Instance.new("Frame", sFrame); leftPanel.Size = UDim2.new(0.48, 0, 1, 0); leftPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15); leftPanel.BorderSizePixel = 0
+local rightPanel = Instance.new("Frame", sFrame); rightPanel.Size = UDim2.new(0.48, 0, 1, 0); rightPanel.Position = UDim2.new(0.52, 0, 0, 0); rightPanel.BackgroundColor3 = Color3.fromRGB(15, 15, 15); rightPanel.BorderSizePixel = 0
+
+local function createPanel(name, parent)
+    local f = Instance.new("Frame", parent); f.Size = UDim2.new(1, 0, 1, 0); f.BackgroundTransparency = 1
+    Instance.new("UIStroke", f).Color = Color3.fromRGB(30, 30, 30)
+    local title = Instance.new("TextLabel", f); title.Size = UDim2.new(0, 80, 0, 20); title.Position = UDim2.new(0, 10, 0, -10); title.BackgroundColor3 = Color3.fromRGB(12, 12, 12); title.Text = name; title.TextColor3 = Color3.new(1,1,1); title.Font = Enum.Font.Code; title.TextSize = 12
+    local content = Instance.new("ScrollingFrame", f); content.Size = UDim2.new(1, -10, 1, -20); content.Position = UDim2.new(0, 5, 0, 10); content.BackgroundTransparency = 1; content.ScrollBarThickness = 0
+    Instance.new("UIListLayout", content).Padding = UDim.new(0, 5)
+    return content
+end
+
+local menuContent = createPanel("Menu", leftPanel)
+local configContent = createPanel("Configuration", rightPanel)
+
+-- Left Panel Items
+createToggle("Invisible Open Button", menuContent, function() end)
+local themeBtn = Instance.new("TextButton", menuContent); themeBtn.Size = UDim2.new(0.95, 0, 0, 30); themeBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); themeBtn.Text = "Cycle Theme Color"; themeBtn.TextColor3 = Color3.new(1,1,1); themeBtn.Font = Enum.Font.Code; themeBtn.BorderSizePixel = 0
+themeBtn.MouseButton1Click:Connect(function()
+    local colors = {Color3.fromRGB(0,255,0), Color3.fromRGB(255,0,0), Color3.fromRGB(0,150,255), Color3.fromRGB(255,255,255)}
+    local nextC = colors[math.random(1, #colors)]
+    uiStroke.Color = nextC
+    for _,v in pairs(allTabButtons) do if v.TextColor3 ~= Color3.fromRGB(150,150,150) then v.TextColor3 = nextC end end
+end)
+
+-- Right Panel (Configs)
+local cfgInput = Instance.new("TextBox", configContent); cfgInput.Size = UDim2.new(0.95, 0, 0, 30); cfgInput.BackgroundColor3 = Color3.fromRGB(25, 25, 25); cfgInput.Text = "config_name"; cfgInput.TextColor3 = Color3.new(1,1,1); cfgInput.Font = Enum.Font.Code; cfgInput.BorderSizePixel = 0
+
+local function cfgBtn(txt, cb)
+    local b = Instance.new("TextButton", configContent); b.Size = UDim2.new(0.95, 0, 0, 30); b.BackgroundColor3 = Color3.fromRGB(30, 30, 30); b.Text = txt; b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.Code; b.BorderSizePixel = 0
+    b.MouseButton1Click:Connect(cb)
+end
+
+cfgBtn("Create", function()
+    local data = {ESP = ESP_SETTINGS, AIM = AIM_SETTINGS, HVH = HVH_SETTINGS}
+    writefile(cfgInput.Text..".json", HttpService:JSONEncode(data))
+end)
+
+cfgBtn("Save", function()
+    local data = {ESP = ESP_SETTINGS, AIM = AIM_SETTINGS, HVH = HVH_SETTINGS}
+    writefile(cfgInput.Text..".json", HttpService:JSONEncode(data))
+end)
+
+cfgBtn("Load", function()
+    if isfile(cfgInput.Text..".json") then
+        local data = HttpService:JSONDecode(readfile(cfgInput.Text..".json"))
+        ESP_SETTINGS = data.ESP; AIM_SETTINGS = data.AIM; HVH_SETTINGS = data.HVH
+    end
+end)
+
+-- TAB CONTENT (Visuals / Aimbot / HvH)
 createToggle("Box ESP", vFrame, function(v) ESP_SETTINGS.ShowBox = v end)
 createToggle("Name ESP", vFrame, function(v) ESP_SETTINGS.ShowName = v end)
 createToggle("Health ESP", vFrame, function(v) ESP_SETTINGS.ShowHealth = v end)
